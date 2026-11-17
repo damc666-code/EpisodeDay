@@ -1,10 +1,10 @@
-
 package ee.episodeday.app
 
 data class Show(
     val id: Int,
     val name: String,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val premieredYear: Int? = null
 )
 
 data class Episode(
