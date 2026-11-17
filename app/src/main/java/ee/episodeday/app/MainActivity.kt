@@ -1,4 +1,3 @@
-
 package ee.episodeday.app
 
 import android.Manifest
@@ -8,7 +7,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -28,14 +26,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import androidx.work.*
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -105,14 +99,6 @@ class MainActivity : ComponentActivity() {
         var loading by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf("Laen sinu seriaale...") }
         var tab by remember { mutableIntStateOf(0) }
-
-        var selectedDate by remember {
-            mutableStateOf(LocalDate.now())
-        }
-
-        var month by remember {
-            mutableStateOf(YearMonth.now())
-        }
 
         fun refresh() {
             loading = true
@@ -338,52 +324,6 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 item {
-                                    SectionTitle("Episoodikalender")
-                                }
-
-                                item {
-                                    CalendarCard(
-                                        month = month,
-                                        selectedDate = selectedDate,
-                                        episodes = episodes,
-                                        onPrevious = {
-                                            month = month.minusMonths(1)
-                                        },
-                                        onNext = {
-                                            month = month.plusMonths(1)
-                                        },
-                                        onSelect = { selectedDate = it }
-                                    )
-                                }
-
-                                item {
-                                    SectionTitle(
-                                        selectedDate.format(
-                                            DateTimeFormatter.ofPattern(
-                                                "d. MMMM",
-                                                Locale("et", "EE")
-                                            )
-                                        )
-                                    )
-                                }
-
-                                val selectedEpisodes = episodes.filter {
-                                    it.airdate == selectedDate.toString()
-                                }
-
-                                if (selectedEpisodes.isEmpty()) {
-                                    item {
-                                        EmptyCard(
-                                            "Sellel päeval uusi episoode ei leitud."
-                                        )
-                                    }
-                                } else {
-                                    items(selectedEpisodes) { episode ->
-                                        EpisodeCard(episode)
-                                    }
-                                }
-
-                                item {
                                     SectionTitle("Järgmised episoodid")
                                 }
 
@@ -543,6 +483,14 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun showTitle(show: Show): String {
+        return if (show.premieredYear != null) {
+            "${show.name} (${show.premieredYear})"
+        } else {
+            show.name
+        }
+    }
+
     @Composable
     private fun ShowPosterCard(show: Show) {
         Column(
@@ -562,7 +510,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(6.dp))
 
             Text(
-                show.name,
+                showTitle(show),
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
@@ -604,7 +552,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(12.dp))
 
                 Text(
-                    show.name,
+                    showTitle(show),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -696,159 +644,6 @@ class MainActivity : ComponentActivity() {
                 color = SoftText,
                 modifier = Modifier.padding(18.dp)
             )
-        }
-    }
-
-    @Composable
-    private fun CalendarCard(
-        month: YearMonth,
-        selectedDate: LocalDate,
-        episodes: List<Episode>,
-        onPrevious: () -> Unit,
-        onNext: () -> Unit,
-        onSelect: (LocalDate) -> Unit
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = CardBg
-            ),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(onClick = onPrevious) {
-                        Text("‹", color = Accent, fontSize = 24.sp)
-                    }
-
-                    Text(
-                        month.format(
-                            DateTimeFormatter.ofPattern(
-                                "MMMM yyyy",
-                                Locale("et", "EE")
-                            )
-                        ).replaceFirstChar {
-                            if (it.isLowerCase()) it.titlecase(
-                                Locale("et", "EE")
-                            ) else it.toString()
-                        },
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp
-                    )
-
-                    TextButton(onClick = onNext) {
-                        Text("›", color = Accent, fontSize = 24.sp)
-                    }
-                }
-
-                val weekdays = listOf(
-                    "E", "T", "K", "N", "R", "L", "P"
-                )
-
-                Row(Modifier.fillMaxWidth()) {
-                    weekdays.forEach { day ->
-                        Text(
-                            day,
-                            modifier = Modifier.weight(1f),
-                            color = SoftText,
-                            fontSize = 12.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                val firstOffset = month.atDay(1).dayOfWeek.value - 1
-                val days = (1..month.lengthOfMonth()).toList()
-                val cells = List(firstOffset) { 0 } + days
-                val weeks = cells.chunked(7)
-
-                weeks.forEach { week ->
-                    Row(Modifier.fillMaxWidth()) {
-                        week.forEach { day ->
-                            if (day == 0) {
-                                Spacer(
-                                    Modifier
-                                        .weight(1f)
-                                        .height(42.dp)
-                                )
-                            } else {
-                                val date = month.atDay(day)
-                                val hasEpisode = episodes.any {
-                                    it.airdate == date.toString()
-                                }
-                                val selected = date == selectedDate
-
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(42.dp)
-                                        .padding(2.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (selected) Accent
-                                            else Color.Transparent
-                                        )
-                                        .clickable {
-                                            onSelect(date)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment =
-                                            Alignment.CenterHorizontally
-                                    ) {
-                                        Text(
-                                            day.toString(),
-                                            color = if (selected) PageBg
-                                            else Color.White,
-                                            fontWeight = if (selected)
-                                                FontWeight.Bold
-                                            else FontWeight.Normal,
-                                            fontSize = 13.sp
-                                        )
-
-                                        if (hasEpisode) {
-                                            Box(
-                                                Modifier
-                                                    .size(4.dp)
-                                                    .clip(RoundedCornerShape(50))
-                                                    .background(
-                                                        if (selected) PageBg
-                                                        else Accent
-                                                    )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        repeat(7 - week.size) {
-                            Spacer(
-                                Modifier
-                                    .weight(1f)
-                                    .height(42.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Text(
-                    "Lilla täpp tähistab päeva, mil on uus episood.",
-                    color = SoftText,
-                    fontSize = 11.sp
-                )
-            }
         }
     }
 }
