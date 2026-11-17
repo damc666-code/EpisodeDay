@@ -1,4 +1,3 @@
-
 package ee.episodeday.app
 
 import android.content.Context
@@ -25,7 +24,9 @@ object Storage {
                 imageUrl = o.optString("imageUrl")
                     .takeIf { url ->
                         !url.isNullOrBlank() && url != "null"
-                    }
+                    },
+                premieredYear = o.optInt("premieredYear")
+                    .takeIf { year -> year > 0 }
             )
         }
     }
@@ -39,6 +40,7 @@ object Storage {
                     .put("id", show.id)
                     .put("name", show.name)
                     .put("imageUrl", show.imageUrl ?: "")
+                    .put("premieredYear", show.premieredYear ?: 0)
             )
         }
 
