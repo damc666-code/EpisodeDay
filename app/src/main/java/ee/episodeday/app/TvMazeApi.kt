@@ -1,4 +1,3 @@
-
 package ee.episodeday.app
 
 import org.json.JSONArray
@@ -37,10 +36,17 @@ object TvMazeApi {
                 ?: image?.optString("medium")
                     ?.takeIf { !it.isNullOrBlank() && it != "null" }
 
+            val premiered = show.optString("premiered", "")
+            val premieredYear = premiered
+                .takeIf { it.length >= 4 && it != "null" }
+                ?.take(4)
+                ?.toIntOrNull()
+
             Show(
                 id = show.optInt("id"),
                 name = show.optString("name"),
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                premieredYear = premieredYear
             )
         }.filter { it.id > 0 && it.name.isNotBlank() }.take(20)
     }
