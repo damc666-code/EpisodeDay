@@ -1,6 +1,12 @@
+
 package ee.episodeday.app
 
-data class Show(val id: Int, val name: String)
+data class Show(
+    val id: Int,
+    val name: String,
+    val imageUrl: String? = null
+)
+
 data class Episode(
     val showId: Int,
     val showName: String,
