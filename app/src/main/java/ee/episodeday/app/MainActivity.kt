@@ -1,3 +1,4 @@
+
 package ee.episodeday.app
 
 import android.Manifest
@@ -6,153 +7,523 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import coil.compose.AsyncImage
 import androidx.work.*
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+private val PageBg = Color(0xFF0B0D16)
+private val CardBg = Color(0xFF171B2A)
+private val Accent = Color(0xFFAA8CFF)
+private val SoftText = Color(0xFFA7ADC2)
+
 class MainActivity : ComponentActivity() {
+
     private val executor = Executors.newSingleThreadExecutor()
-    private val requestPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val requestPermission =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         Notifications.createChannel(this)
-        if (Build.VERSION.SDK_INT >= 33) requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            requestPermission.launch(
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
+
         scheduleRefresh()
-        setContent { EpisodeDayScreen() }
+
+        setContent {
+            EpisodeDayScreen()
+        }
     }
+
     private fun scheduleRefresh() {
-        val request = PeriodicWorkRequestBuilder<EpisodeWorker>(24, TimeUnit.HOURS)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("episode_refresh", ExistingPeriodicWorkPolicy.UPDATE, request)
+        val request =
+            PeriodicWorkRequestBuilder<EpisodeWorker>(
+                24, TimeUnit.HOURS
+            )
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "episode_refresh",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request
+        )
     }
 
     @Composable
     private fun EpisodeDayScreen() {
-        var shows by remember { mutableStateOf(Storage.getShows(this)) }
-        var episodes by remember { mutableStateOf<List<Episode>>(emptyList()) }
+        var shows by remember {
+            mutableStateOf(Storage.getShows(this))
+        }
+
+        var episodes by remember {
+            mutableStateOf<List<Episode>>(emptyList())
+        }
+
         var query by remember { mutableStateOf("") }
         var results by remember { mutableStateOf<List<Show>>(emptyList()) }
         var loading by remember { mutableStateOf(false) }
-        var message by remember { mutableStateOf("Lisa seriaal, et näha uusi osi.") }
+        var message by remember { mutableStateOf("Laen sinu seriaale...") }
         var tab by remember { mutableIntStateOf(0) }
+
+        var selectedDate by remember {
+            mutableStateOf(LocalDate.now())
+        }
+
+        var month by remember {
+            mutableStateOf(YearMonth.now())
+        }
 
         fun refresh() {
             loading = true
+
             executor.execute {
                 val fetched = TvMazeApi.refreshAll(shows)
+
                 runOnUiThread {
                     episodes = fetched
                     Notifications.notifyToday(this, fetched)
                     loading = false
-                    message = if (fetched.isEmpty()) "Kuupäevi ei leitud. Proovi hiljem uuesti." else "Andmed uuendatud."
+                    message = if (fetched.isEmpty()) {
+                        "Lisa mõni seriaal, et näha uusi osi."
+                    } else {
+                        "Andmed uuendatud"
+                    }
                 }
             }
         }
-        LaunchedEffect(shows) { refresh() }
 
-        MaterialTheme(colorScheme = darkColorScheme(
-            primary = androidx.compose.ui.graphics.Color(0xFFB9A0FF),
-            background = androidx.compose.ui.graphics.Color(0xFF10111A),
-            surface = androidx.compose.ui.graphics.Color(0xFF1B1D2A)
-        )) {
+        fun searchShows() {
+            if (query.isBlank()) return
+
+            loading = true
+
+            executor.execute {
+                val found = runCatching {
+                    TvMazeApi.search(query)
+                }.getOrDefault(emptyList())
+
+                runOnUiThread {
+                    results = found
+                    loading = false
+                }
+            }
+        }
+
+        LaunchedEffect(shows) {
+            refresh()
+        }
+
+        MaterialTheme(
+            colorScheme = darkColorScheme(
+                primary = Accent,
+                background = PageBg,
+                surface = CardBg,
+                onBackground = Color.White,
+                onSurface = Color.White
+            )
+        ) {
             Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                topBar = {
-                    Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                        Text("EpisodeDay", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("Sinu seriaalid ja uued osad ühes kohas", color = MaterialTheme.colorScheme.onBackground.copy(alpha = .7f))
-                    }
-                },
+                containerColor = PageBg,
                 bottomBar = {
-                    NavigationBar {
-                        NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, icon = { Text("▦") }, label = { Text("Tulemas") })
-                        NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, icon = { Text("＋") }, label = { Text("Lisa seriaal") })
-                        NavigationBarItem(selected = tab == 2, onClick = { tab = 2 }, icon = { Text("▣") }, label = { Text("Minu seriaalid") })
+                    NavigationBar(
+                        containerColor = CardBg
+                    ) {
+                        NavigationBarItem(
+                            selected = tab == 0,
+                            onClick = { tab = 0 },
+                            icon = { Text("⌂", fontSize = 22.sp) },
+                            label = { Text("Kodu") }
+                        )
+
+                        NavigationBarItem(
+                            selected = tab == 1,
+                            onClick = { tab = 1 },
+                            icon = { Text("＋", fontSize = 22.sp) },
+                            label = { Text("Lisa") }
+                        )
+
+                        NavigationBarItem(
+                            selected = tab == 2,
+                            onClick = { tab = 2 },
+                            icon = { Text("▣", fontSize = 22.sp) },
+                            label = { Text("Minu sarjad") }
+                        )
                     }
                 }
             ) { padding ->
-                Column(Modifier.padding(padding).fillMaxSize().padding(horizontal = 18.dp)) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "EPISODEDAY",
+                                color = Accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 3.sp
+                            )
+
+                            Text(
+                                when (tab) {
+                                    0 -> "Sinu seriaalimaailm"
+                                    1 -> "Leia uusi seriaale"
+                                    else -> "Sinu kollektsioon"
+                                },
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        Text(
+                            "ED",
+                            color = Accent,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(CardBg)
+                                .padding(14.dp)
+                        )
+                    }
+
                     when (tab) {
                         0 -> {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text("Järgmised osad", style = MaterialTheme.typography.titleLarge)
-                                TextButton(onClick = { refresh() }) { Text("Uuenda") }
-                            }
-                            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(message, color = MaterialTheme.colorScheme.onBackground.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
-                            val upcoming = episodes.filter { runCatching { LocalDate.parse(it.airdate).isAfter(LocalDate.now().minusDays(1)) }.getOrDefault(false) }
-                            if (upcoming.isEmpty() && !loading) Text("Tulevasi osi pole veel teada.", modifier = Modifier.padding(top = 18.dp))
-                            LazyColumn(contentPadding = PaddingValues(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                items(upcoming.take(100)) { ep -> EpisodeCard(ep) }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = 18.dp,
+                                    end = 18.dp,
+                                    bottom = 20.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(18.dp)
+                            ) {
+
+                                item {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = CardBg
+                                        ),
+                                        shape = RoundedCornerShape(22.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(20.dp)
+                                        ) {
+                                            Text(
+                                                "TERE TULEMAST TAGASI",
+                                                color = Accent,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 2.sp
+                                            )
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            Text(
+                                                "Mis järgmisena vaatamiseks tuleb?",
+                                                color = Color.White,
+                                                fontSize = 21.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            Text(
+                                                "${shows.size} seriaali  •  ${episodes.size} episoodi",
+                                                color = SoftText
+                                            )
+
+                                            Spacer(Modifier.height(12.dp))
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Button(
+                                                    onClick = { refresh() },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Accent,
+                                                        contentColor = PageBg
+                                                    )
+                                                ) {
+                                                    Text("Uuenda andmeid")
+                                                }
+
+                                                Spacer(Modifier.width(10.dp))
+
+                                                if (loading) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(22.dp),
+                                                        color = Accent,
+                                                        strokeWidth = 2.dp
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                message,
+                                                color = SoftText,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (shows.isNotEmpty()) {
+                                    item {
+                                        SectionTitle("Minu seriaalid")
+                                    }
+
+                                    item {
+                                        LazyRow(
+                                            horizontalArrangement =
+                                                Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            items(shows) { show ->
+                                                ShowPosterCard(show)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                item {
+                                    SectionTitle("Episoodikalender")
+                                }
+
+                                item {
+                                    CalendarCard(
+                                        month = month,
+                                        selectedDate = selectedDate,
+                                        episodes = episodes,
+                                        onPrevious = {
+                                            month = month.minusMonths(1)
+                                        },
+                                        onNext = {
+                                            month = month.plusMonths(1)
+                                        },
+                                        onSelect = { selectedDate = it }
+                                    )
+                                }
+
+                                item {
+                                    SectionTitle(
+                                        selectedDate.format(
+                                            DateTimeFormatter.ofPattern(
+                                                "d. MMMM",
+                                                Locale("et", "EE")
+                                            )
+                                        )
+                                    )
+                                }
+
+                                val selectedEpisodes = episodes.filter {
+                                    it.airdate == selectedDate.toString()
+                                }
+
+                                if (selectedEpisodes.isEmpty()) {
+                                    item {
+                                        EmptyCard(
+                                            "Sellel päeval uusi episoode ei leitud."
+                                        )
+                                    }
+                                } else {
+                                    items(selectedEpisodes) { episode ->
+                                        EpisodeCard(episode)
+                                    }
+                                }
+
+                                item {
+                                    SectionTitle("Järgmised episoodid")
+                                }
+
+                                val upcoming = episodes.filter {
+                                    runCatching {
+                                        LocalDate.parse(it.airdate)
+                                            .isAfter(LocalDate.now().minusDays(1))
+                                    }.getOrDefault(false)
+                                }.take(30)
+
+                                if (upcoming.isEmpty()) {
+                                    item {
+                                        EmptyCard(
+                                            "Tulevasi episoode pole veel teada."
+                                        )
+                                    }
+                                } else {
+                                    items(upcoming) { episode ->
+                                        EpisodeCard(episode)
+                                    }
+                                }
                             }
                         }
+
                         1 -> {
-                            Text("Leia seriaal", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(10.dp))
-                            OutlinedTextField(
-                                value = query, onValueChange = { query = it },
-                                label = { Text("Seriaali nimi") }, modifier = Modifier.fillMaxWidth(),
-                                singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(onSearch = {
-                                    loading = true
-                                    executor.execute {
-                                        val found = runCatching { TvMazeApi.search(query) }.getOrDefault(emptyList())
-                                        runOnUiThread { results = found; loading = false }
-                                    }
-                                })
-                            )
-                            Button(onClick = {
-                                loading = true
-                                executor.execute {
-                                    val found = runCatching { TvMazeApi.search(query) }.getOrDefault(emptyList())
-                                    runOnUiThread { results = found; loading = false }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 18.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = query,
+                                    onValueChange = { query = it },
+                                    label = { Text("Seriaali nimi") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Search
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onSearch = { searchShows() }
+                                    ),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Accent,
+                                        focusedLabelColor = Accent,
+                                        cursorColor = Accent
+                                    )
+                                )
+
+                                Spacer(Modifier.height(10.dp))
+
+                                Button(
+                                    onClick = { searchShows() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Accent,
+                                        contentColor = PageBg
+                                    )
+                                ) {
+                                    Text("OTSI SERIAALE")
                                 }
-                            }, modifier = Modifier.padding(top = 8.dp)) { Text("Otsi") }
-                            if (loading) CircularProgressIndicator(Modifier.padding(12.dp))
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(results) { show ->
-                                    Card {
-                                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text(show.name, Modifier.weight(1f))
-                                            TextButton(onClick = {
-                                                shows = (shows + show).distinctBy { it.id }
-                                                Storage.saveShows(this@MainActivity, shows)
-                                                results = results.filterNot { it.id == show.id }
-                                                tab = 2
-                                            }) { Text(if (shows.any { it.id == show.id }) "Lisatud" else "Lisa") }
-                                        }
+
+                                if (loading) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = Accent
+                                    )
+                                }
+
+                                LazyColumn(
+                                    verticalArrangement =
+                                        Arrangement.spacedBy(12.dp),
+                                    contentPadding =
+                                        PaddingValues(vertical = 12.dp)
+                                ) {
+                                    items(results) { show ->
+                                        SearchShowCard(
+                                            show = show,
+                                            alreadyAdded = shows.any {
+                                                it.id == show.id
+                                            },
+                                            onAdd = {
+                                                if (shows.none {
+                                                        it.id == show.id
+                                                    }) {
+                                                    shows = shows + show
+                                                    Storage.saveShows(
+                                                        this@MainActivity,
+                                                        shows
+                                                    )
+                                                    results = results.filterNot {
+                                                        it.id == show.id
+                                                    }
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
                         }
+
                         else -> {
-                            Text("Minu seriaalid", style = MaterialTheme.typography.titleLarge)
-                            if (shows.isEmpty()) Text("Sa pole veel ühtegi seriaali lisanud.", Modifier.padding(top = 12.dp))
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(shows) { show ->
-                                    Card {
-                                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text(show.name, Modifier.weight(1f))
-                                            TextButton(onClick = {
-                                                shows = shows.filterNot { it.id == show.id }
-                                                Storage.saveShows(this@MainActivity, shows)
-                                            }) { Text("Eemalda") }
-                                        }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    horizontal = 18.dp,
+                                    vertical = 8.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item {
+                                    Text(
+                                        "${shows.size} seriaali sinu kollektsioonis",
+                                        color = SoftText
+                                    )
+                                }
+
+                                if (shows.isEmpty()) {
+                                    item {
+                                        EmptyCard(
+                                            "Sinu kollektsioon on tühi. Lisa esimene seriaal!"
+                                        )
                                     }
+                                }
+
+                                items(shows) { show ->
+                                    SearchShowCard(
+                                        show = show,
+                                        alreadyAdded = true,
+                                        onAdd = {
+                                            shows = shows.filterNot {
+                                                it.id == show.id
+                                            }
+                                            Storage.saveShows(
+                                                this@MainActivity,
+                                                shows
+                                            )
+                                        },
+                                        removeMode = true
+                                    )
                                 }
                             }
                         }
@@ -163,15 +534,320 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun EpisodeCard(ep: Episode) {
+    private fun SectionTitle(title: String) {
+        Text(
+            title,
+            color = Color.White,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    @Composable
+    private fun ShowPosterCard(show: Show) {
+        Column(
+            modifier = Modifier.width(112.dp)
+        ) {
+            AsyncImage(
+                model = show.imageUrl,
+                contentDescription = show.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(155.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CardBg),
+                contentScale = ContentScale.Crop
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Text(
+                show.name,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+
+    @Composable
+    private fun SearchShowCard(
+        show: Show,
+        alreadyAdded: Boolean,
+        onAdd: () -> Unit,
+        removeMode: Boolean = false
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = CardBg
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = show.imageUrl,
+                    contentDescription = show.name,
+                    modifier = Modifier
+                        .size(width = 68.dp, height = 94.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(PageBg),
+                    contentScale = ContentScale.Crop
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    show.name,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                TextButton(
+                    onClick = onAdd,
+                    enabled = removeMode || !alreadyAdded
+                ) {
+                    Text(
+                        if (removeMode) "Eemalda"
+                        else if (alreadyAdded) "Lisatud"
+                        else "Lisa",
+                        color = Accent
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun EpisodeCard(episode: Episode) {
         val date = runCatching {
-            LocalDate.parse(ep.airdate).format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-        }.getOrDefault(ep.airdate)
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Text(ep.showName, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-                Text(ep.name, style = MaterialTheme.typography.titleMedium)
-                Text("$date  •  ${ep.season}. hooaeg, ${ep.number}. osa", color = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f))
+            LocalDate.parse(episode.airdate).format(
+                DateTimeFormatter.ofPattern("dd.MM.yyyy")
+            )
+        }.getOrDefault(episode.airdate)
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = CardBg
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(15.dp)
+            ) {
+                Text(
+                    episode.showName.uppercase(),
+                    color = Accent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Spacer(Modifier.height(5.dp))
+
+                Text(
+                    episode.name,
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(5.dp))
+
+                Text(
+                    "$date   •   ${episode.season}. hooaeg  •   ${episode.number}. osa",
+                    color = SoftText,
+                    fontSize = 12.sp
+                )
+
+                if (episode.summary.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+
+                    Text(
+                        episode.summary,
+                        color = SoftText,
+                        fontSize = 12.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun EmptyCard(text: String) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = CardBg
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                text,
+                color = SoftText,
+                modifier = Modifier.padding(18.dp)
+            )
+        }
+    }
+
+    @Composable
+    private fun CalendarCard(
+        month: YearMonth,
+        selectedDate: LocalDate,
+        episodes: List<Episode>,
+        onPrevious: () -> Unit,
+        onNext: () -> Unit,
+        onSelect: (LocalDate) -> Unit
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = CardBg
+            ),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = onPrevious) {
+                        Text("‹", color = Accent, fontSize = 24.sp)
+                    }
+
+                    Text(
+                        month.format(
+                            DateTimeFormatter.ofPattern(
+                                "MMMM yyyy",
+                                Locale("et", "EE")
+                            )
+                        ).replaceFirstChar {
+                            if (it.isLowerCase()) it.titlecase(
+                                Locale("et", "EE")
+                            ) else it.toString()
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+
+                    TextButton(onClick = onNext) {
+                        Text("›", color = Accent, fontSize = 24.sp)
+                    }
+                }
+
+                val weekdays = listOf(
+                    "E", "T", "K", "N", "R", "L", "P"
+                )
+
+                Row(Modifier.fillMaxWidth()) {
+                    weekdays.forEach { day ->
+                        Text(
+                            day,
+                            modifier = Modifier.weight(1f),
+                            color = SoftText,
+                            fontSize = 12.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                val firstOffset = month.atDay(1).dayOfWeek.value - 1
+                val days = (1..month.lengthOfMonth()).toList()
+                val cells = List(firstOffset) { 0 } + days
+                val weeks = cells.chunked(7)
+
+                weeks.forEach { week ->
+                    Row(Modifier.fillMaxWidth()) {
+                        week.forEach { day ->
+                            if (day == 0) {
+                                Spacer(
+                                    Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                )
+                            } else {
+                                val date = month.atDay(day)
+                                val hasEpisode = episodes.any {
+                                    it.airdate == date.toString()
+                                }
+                                val selected = date == selectedDate
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .padding(2.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (selected) Accent
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            onSelect(date)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment =
+                                            Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            day.toString(),
+                                            color = if (selected) PageBg
+                                            else Color.White,
+                                            fontWeight = if (selected)
+                                                FontWeight.Bold
+                                            else FontWeight.Normal,
+                                            fontSize = 13.sp
+                                        )
+
+                                        if (hasEpisode) {
+                                            Box(
+                                                Modifier
+                                                    .size(4.dp)
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(
+                                                        if (selected) PageBg
+                                                        else Accent
+                                                    )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        repeat(7 - week.size) {
+                            Spacer(
+                                Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    "Lilla täpp tähistab päeva, mil on uus episood.",
+                    color = SoftText,
+                    fontSize = 11.sp
+                )
             }
         }
     }
