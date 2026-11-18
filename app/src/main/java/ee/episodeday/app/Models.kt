@@ -4,7 +4,8 @@ data class Show(
     val id: Int,
     val name: String,
     val imageUrl: String? = null,
-    val premieredYear: Int? = null
+    val premieredYear: Int? = null,
+    val rating: Double? = null
 )
 
 data class Episode(
