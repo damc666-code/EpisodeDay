@@ -13,10 +13,15 @@ object TvMazeApi {
 
         connection.connectTimeout = 12000
         connection.readTimeout = 12000
-        connection.setRequestProperty("User-Agent", "EpisodeDay-Android/2.0")
+        connection.setRequestProperty(
+            "User-Agent",
+            "EpisodeDay-Android/2.0"
+        )
 
         return try {
-            connection.inputStream.bufferedReader().use { it.readText() }
+            connection.inputStream.bufferedReader().use {
+                it.readText()
+            }
         } finally {
             connection.disconnect()
         }
@@ -27,34 +32,51 @@ object TvMazeApi {
         val arr = JSONArray(get("/search/shows?q=$encoded"))
 
         return (0 until arr.length()).mapNotNull { i ->
+
             val show = arr.getJSONObject(i).optJSONObject("show")
                 ?: return@mapNotNull null
 
             val image = show.optJSONObject("image")
+
             val imageUrl = image?.optString("original")
                 ?.takeIf { !it.isNullOrBlank() && it != "null" }
                 ?: image?.optString("medium")
                     ?.takeIf { !it.isNullOrBlank() && it != "null" }
 
             val premiered = show.optString("premiered", "")
+
             val premieredYear = premiered
                 .takeIf { it.length >= 4 && it != "null" }
                 ?.take(4)
                 ?.toIntOrNull()
 
+            // TVmaze'i hinnang skaalal 0–10
+            val ratingObject = show.optJSONObject("rating")
+
+            val rating = (ratingObject?.opt("average") as? Number)
+                ?.toDouble()
+                ?.takeIf { it > 0.0 }
+
             Show(
                 id = show.optInt("id"),
                 name = show.optString("name"),
                 imageUrl = imageUrl,
-                premieredYear = premieredYear
+                premieredYear = premieredYear,
+                rating = rating
             )
-        }.filter { it.id > 0 && it.name.isNotBlank() }.take(20)
+
+        }.filter {
+            it.id > 0 && it.name.isNotBlank()
+        }.take(20)
     }
 
     fun episodes(show: Show): List<Episode> {
-        val arr = JSONArray(get("/shows/${show.id}/episodes"))
+        val arr = JSONArray(
+            get("/shows/${show.id}/episodes")
+        )
 
         return (0 until arr.length()).mapNotNull { i ->
+
             val e = arr.getJSONObject(i)
             val date = e.optString("airdate", "")
 
@@ -79,6 +101,10 @@ object TvMazeApi {
 
     fun refreshAll(shows: List<Show>): List<Episode> =
         shows.flatMap { show ->
-            runCatching { episodes(show) }.getOrDefault(emptyList())
-        }.sortedBy { it.airdate }
+            runCatching {
+                episodes(show)
+            }.getOrDefault(emptyList())
+        }.sortedBy {
+            it.airdate
+        }
 }
