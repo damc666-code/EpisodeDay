@@ -32,6 +32,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 
 private val PageBg = Color(0xFF0B0D16)
 private val CardBg = Color(0xFF171B2A)
@@ -94,11 +95,25 @@ class MainActivity : ComponentActivity() {
             mutableStateOf<List<Episode>>(emptyList())
         }
 
-        var query by remember { mutableStateOf("") }
-        var results by remember { mutableStateOf<List<Show>>(emptyList()) }
-        var loading by remember { mutableStateOf(false) }
-        var message by remember { mutableStateOf("Laen sinu seriaale...") }
-        var tab by remember { mutableIntStateOf(0) }
+        var query by remember {
+            mutableStateOf("")
+        }
+
+        var results by remember {
+            mutableStateOf<List<Show>>(emptyList())
+        }
+
+        var loading by remember {
+            mutableStateOf(false)
+        }
+
+        var message by remember {
+            mutableStateOf("Laen sinu seriaale...")
+        }
+
+        var tab by remember {
+            mutableIntStateOf(0)
+        }
 
         fun refresh() {
             loading = true
@@ -110,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     episodes = fetched
                     Notifications.notifyToday(this, fetched)
                     loading = false
+
                     message = if (fetched.isEmpty()) {
                         "Lisa mõni seriaal, et näha uusi osi."
                     } else {
@@ -158,22 +174,34 @@ class MainActivity : ComponentActivity() {
                         NavigationBarItem(
                             selected = tab == 0,
                             onClick = { tab = 0 },
-                            icon = { Text("⌂", fontSize = 22.sp) },
-                            label = { Text("Kodu") }
+                            icon = {
+                                Text("⌂", fontSize = 22.sp)
+                            },
+                            label = {
+                                Text("Kodu")
+                            }
                         )
 
                         NavigationBarItem(
                             selected = tab == 1,
                             onClick = { tab = 1 },
-                            icon = { Text("＋", fontSize = 22.sp) },
-                            label = { Text("Lisa") }
+                            icon = {
+                                Text("＋", fontSize = 22.sp)
+                            },
+                            label = {
+                                Text("Lisa")
+                            }
                         )
 
                         NavigationBarItem(
                             selected = tab == 2,
                             onClick = { tab = 2 },
-                            icon = { Text("▣", fontSize = 22.sp) },
-                            label = { Text("Minu sarjad") }
+                            icon = {
+                                Text("▣", fontSize = 22.sp)
+                            },
+                            label = {
+                                Text("Minu sarjad")
+                            }
                         )
                     }
                 }
@@ -188,10 +216,15 @@ class MainActivity : ComponentActivity() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                            .padding(
+                                horizontal = 20.dp,
+                                vertical = 16.dp
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(
                                 "EPISODEDAY",
                                 color = Accent,
@@ -225,6 +258,8 @@ class MainActivity : ComponentActivity() {
                     }
 
                     when (tab) {
+
+                        // KODUEKRAAN
                         0 -> {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
@@ -233,7 +268,8 @@ class MainActivity : ComponentActivity() {
                                     end = 18.dp,
                                     bottom = 20.dp
                                 ),
-                                verticalArrangement = Arrangement.spacedBy(18.dp)
+                                verticalArrangement =
+                                    Arrangement.spacedBy(18.dp)
                             ) {
 
                                 item {
@@ -274,7 +310,8 @@ class MainActivity : ComponentActivity() {
                                             Spacer(Modifier.height(12.dp))
 
                                             Row(
-                                                verticalAlignment = Alignment.CenterVertically
+                                                verticalAlignment =
+                                                    Alignment.CenterVertically
                                             ) {
                                                 Button(
                                                     onClick = { refresh() },
@@ -330,7 +367,9 @@ class MainActivity : ComponentActivity() {
                                 val upcoming = episodes.filter {
                                     runCatching {
                                         LocalDate.parse(it.airdate)
-                                            .isAfter(LocalDate.now().minusDays(1))
+                                            .isAfter(
+                                                LocalDate.now().minusDays(1)
+                                            )
                                     }.getOrDefault(false)
                                 }.take(30)
 
@@ -348,6 +387,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        // SERIAALIDE OTSING
                         1 -> {
                             Column(
                                 modifier = Modifier
@@ -356,15 +396,21 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 OutlinedTextField(
                                     value = query,
-                                    onValueChange = { query = it },
-                                    label = { Text("Seriaali nimi") },
+                                    onValueChange = {
+                                        query = it
+                                    },
+                                    label = {
+                                        Text("Seriaali nimi")
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(
                                         imeAction = ImeAction.Search
                                     ),
                                     keyboardActions = KeyboardActions(
-                                        onSearch = { searchShows() }
+                                        onSearch = {
+                                            searchShows()
+                                        }
                                     ),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Accent,
@@ -376,7 +422,9 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.height(10.dp))
 
                                 Button(
-                                    onClick = { searchShows() },
+                                    onClick = {
+                                        searchShows()
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Accent,
@@ -410,10 +458,12 @@ class MainActivity : ComponentActivity() {
                                                         it.id == show.id
                                                     }) {
                                                     shows = shows + show
+
                                                     Storage.saveShows(
                                                         this@MainActivity,
                                                         shows
                                                     )
+
                                                     results = results.filterNot {
                                                         it.id == show.id
                                                     }
@@ -425,6 +475,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        // MINU SERIAALID
                         else -> {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
@@ -432,7 +483,8 @@ class MainActivity : ComponentActivity() {
                                     horizontal = 18.dp,
                                     vertical = 8.dp
                                 ),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                verticalArrangement =
+                                    Arrangement.spacedBy(12.dp)
                             ) {
                                 item {
                                     Text(
@@ -457,6 +509,7 @@ class MainActivity : ComponentActivity() {
                                             shows = shows.filterNot {
                                                 it.id == show.id
                                             }
+
                                             Storage.saveShows(
                                                 this@MainActivity,
                                                 shows
@@ -517,6 +570,17 @@ class MainActivity : ComponentActivity() {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                show.rating?.let {
+                    "⭐ %.1f/10".format(Locale.US, it)
+                } ?: "Reiting puudub",
+                color = Accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 
@@ -551,12 +615,29 @@ class MainActivity : ComponentActivity() {
 
                 Spacer(Modifier.width(12.dp))
 
-                Text(
-                    showTitle(show),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
+                Column(
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Text(
+                        showTitle(show),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        show.rating?.let {
+                            "⭐ %.1f/10".format(Locale.US, it)
+                        } ?: "Reiting puudub",
+                        color = Accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
                 TextButton(
                     onClick = onAdd,
